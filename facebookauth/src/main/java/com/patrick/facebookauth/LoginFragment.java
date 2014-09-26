@@ -36,7 +36,6 @@ public class LoginFragment extends Fragment {
             onSessionStateChange(session, state, exception);
         }
     };
-    private RestAdapter mRestAdapter;
     private SnaapiqService mSnaapiqService;
 
     public LoginFragment() {
@@ -48,10 +47,10 @@ public class LoginFragment extends Fragment {
         super.onCreate(savedInstanceState);
         uiHelper = new UiLifecycleHelper(getActivity(), callback);
         uiHelper.onCreate(savedInstanceState);
-        mRestAdapter = new RestAdapter.Builder()
+        RestAdapter restAdapter = new RestAdapter.Builder()
                 .setEndpoint("https://api.snaapiq.com")
                 .build();
-        mSnaapiqService = mRestAdapter.create(SnaapiqService.class);
+        mSnaapiqService = restAdapter.create(SnaapiqService.class);
     }
 
     @Override
@@ -109,14 +108,22 @@ public class LoginFragment extends Fragment {
     private void onSessionStateChange(final Session session, SessionState state, Exception exception) {
         if (state.isOpened()) {
             Log.i(TAG, "Logged in...");
-            Request request  = new Request(session,"me");
+            Request request = new Request(session, "me");
             request.setCallback(new Request.Callback() {
                 @Override
                 public void onCompleted(Response response) {
                     String id;
                     try {
+                        //We've retrieved the ID of the user, and our session has a long lived token
+                        // by default, so we put them into a POJO and have our SnaapiqService POST
+                        // the id/token to the server to be cached.
                         id = response.getGraphObject().getInnerJSONObject().getString("id");
-                        mSnaapiqService.cacheToken(new SnaapiqUser(id,session.getAccessToken()));
+                        SnaapiqUser user = new SnaapiqUser(id, session.getAccessToken());
+                        mSnaapiqService.cacheToken(user);
+
+                        //We can retrieve the cached token in a similar manner.
+                        String longLivedServerToken = mSnaapiqService.retrieveToken(user);
+
                     } catch (JSONException e) {
                         e.printStackTrace();
                     }
